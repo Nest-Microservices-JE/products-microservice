@@ -1,114 +1,116 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Microservicio de Productos (Products Microservice)
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Este proyecto es un microservicio desarrollado en NestJS para la gestión de productos, utilizando TCP como protocolo de transporte y Prisma ORM con SQLite para la persistencia de datos.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Descripción del Proyecto
 
-## Description
+El microservicio se encarga de administrar el catálogo de productos mediante mensajería basada en patrones TCP. Implementa borrado lógico (soft delete) para asegurar la integridad de los datos y respuestas paginadas para los listados de productos.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Tecnologías Utilizadas
 
-## Project setup
+- NestJS (Framework de Node.js)
+- NestJS Microservices (Transporte TCP)
+- Prisma ORM con adaptador `@prisma/adapter-better-sqlite3`
+- SQLite (Base de datos)
+- Joi (Validación de variables de entorno)
+- Class Validator / Class Transformer (Validación de DTOs)
+- Oxlint y Prettier (Linter y formateo de código)
 
-```bash
-$ npm install
+## Características e Implementaciones
+
+- Arquitectura de Microservicio: Configurado para escuchar peticiones TCP mediante `@nestjs/microservices`.
+- Gestión de Base de Datos: Modelo `Product` gestionado mediante Prisma ORM.
+- Borrado Lógico (Soft Delete): En lugar de eliminar físicamente registros de la base de datos, se actualiza el campo `available` a `false`.
+- Filtrado Automático: Las búsquedas (`find_all_products`, `find_one_product`) retornan únicamente los productos que se encuentran disponibles (`available: true`).
+- Paginación Integrada: El patrón `find_all_products` acepta parámetros `page` y `limit`, retornando los resultados junto con metadatos (`total`, `page`, `lastPage`).
+- Validación Estricta: Uso de `ValidationPipe` global con `whitelist` y `forbidNonWhitelisted` habilitados para desestimar propiedades no permitidas.
+- Validación de Entorno: Variables de entorno strictly validadas con `Joi` al iniciar la aplicación.
+
+## Estructura del Modelo de Datos (Prisma)
+
+El modelo de datos `Product` definido en `prisma/schema.prisma` cuenta con los siguientes campos:
+
+- id (Int): Identificador único autoincremental (Clave primaria).
+- name (String): Nombre del producto (Único).
+- price (Float): Precio del producto.
+- available (Boolean): Estado de disponibilidad (Por defecto `true`). Cuenta con un índice explícito `@@index([available])` para optimizar las consultas.
+- createdAt (DateTime): Fecha de creación del registro.
+- updatedAt (DateTime): Fecha de última actualización del registro.
+
+## Patrones de Mensajes TCP (Message Patterns)
+
+El microservicio expone los siguientes patrones mediante el decorador `@MessagePattern`:
+
+### 1. Crear producto
+- Patrón: `{ cmd: 'create_product' }`
+- Payload: `CreateProductDto` (`name`: string, `price`: number)
+
+### 2. Listar productos paginados
+- Patrón: `{ cmd: 'find_all_products' }`
+- Payload: `PaginationDto` (`page`: number opcional, `limit`: number opcional)
+- Respuesta: Objeto con `data` (lista de productos disponibles) y `metadata` (`total`, `page`, `lastPage`).
+
+### 3. Obtener un producto por ID
+- Patrón: `{ cmd: 'find_one_product' }`
+- Payload: `{ id: string | number }`
+- Respuesta: Producto correspondiente si se encuentra disponible (`available: true`).
+
+### 4. Actualizar producto
+- Patrón: `{ cmd: 'update_product' }`
+- Payload: `UpdateProductDto` (`id`: number, `name`?: string, `price`?: number)
+
+### 5. Eliminar producto (Soft Delete)
+- Patrón: `{ cmd: 'delete_product' }`
+- Payload: `{ id: string | number }`
+- Acción: Marca el campo `available` como `false`.
+
+## Configuración del Entorno
+
+Crear un archivo `.env` en la raíz del proyecto basándose en el archivo `.env.template`:
+
+```env
+PORT=3001
+DATABASE_URL="file:./dev.db"
 ```
 
-## Compile and run the project
+Variables requeridas:
+- PORT: Puerto en el que se ejecutará el servicio TCP.
+- DATABASE_URL: Cadena de conexión para SQLite.
+
+## Instalación y Configuración
+
+1. Instalar dependencias:
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm install
 ```
 
-## Run tests
+2. Generar cliente de Prisma y ejecutar migraciones:
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npx prisma migrate dev
+npx prisma generate
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## Ejecución del Proyecto
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+# Desarrollo
+npm run start
+
+# Modo Watch (Desarrollo continuo)
+npm run start:dev
+
+# Producción
+npm run start:prod
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## Linter y Formateo de Código
 
-## Observability
+```bash
+# Formatear código con Prettier
+npm run format
 
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
-
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
-
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observer](https://observer.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+# Ejecutar Oxlint
+npm run lint
+```
